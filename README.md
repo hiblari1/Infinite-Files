@@ -75,30 +75,3 @@ This creates `dist/InfiniteFiles.dmg` using `hdiutil`.
 
 ### Windows EXE
 
-`flutter build windows` emits an `.exe` in the release folder, but target machines also need the Microsoft Visual C++ runtime.
-
-If users see `VCRUNTIME140.dll` missing, install the official `vc_redist.x64.exe` (Visual C++ Redistributable) first, then run `infinite_files.exe`.
-
-The GitHub Actions Windows artifact now bundles `vc_redist.x64.exe` next to the app to avoid this issue for testers.
-
-## Build in GitHub (GitHub Actions)
-
-This repository includes a workflow at `.github/workflows/build-desktop.yml` for all target desktop OSes.
-
-It builds and uploads:
-
-- `infinite-files-linux-bundle` (Linux build bundle)
-- `infinite-files-windows-portable` (Windows EXE + `vc_redist.x64.exe`)
-- `infinite-files-macos-dmg` (macOS DMG)
-
-### Run it
-
-1. Push your branch to GitHub.
-2. Open **Actions** tab.
-3. Run **Build Infinite Files Desktop** with **Run workflow** (or let it run automatically on push/PR).
-4. Download needed artifacts from the workflow run summary.
-
-### Notes
-
-- If Windows shows missing `VCRUNTIME140.dll`, run `vc_redist.x64.exe` from the Windows artifact.
-- For public macOS release, add code signing + notarization in a release workflow.
