@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Infinite Files · M3 Expressive</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #080913;
+        --surface: rgba(17, 19, 32, 0.7);
+        --surface-2: rgba(27, 28, 47, 0.75);
+        --outline: rgba(255, 255, 255, 0.16);
+        --text: #e5e9ff;
+        --muted: #a7abc8;
+        --primary: #9a8cff;
+        --secondary: #7fd7ff;
+        --success: #85f6b6;
+        --danger: #ff8aa8;
+        --shadow: 0 22px 40px rgba(0, 0, 0, 0.45);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Inter", "Segoe UI", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(80vw 60vh at 15% -10%, rgba(154, 140, 255, 0.24), transparent 75%),
+          radial-gradient(50vw 45vh at 85% 5%, rgba(127, 215, 255, 0.22), transparent 70%),
+          radial-gradient(70vw 80vh at 50% 120%, rgba(247, 83, 180, 0.2), transparent 65%),
+          linear-gradient(160deg, #090a17 0%, #070911 40%, #05060d 100%);
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 1rem;
+        padding: 1rem;
+        min-height: 100vh;
+      }
+
+      .pane {
+        border: 1px solid var(--outline);
+        border-radius: 28px;
+        backdrop-filter: blur(16px) saturate(150%);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .sidebar {
+        background: linear-gradient(180deg, rgba(19, 21, 37, 0.86), rgba(11, 12, 24, 0.78));
+        padding: 1.15rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .brand {
+        border: 1px solid var(--outline);
+        background: linear-gradient(135deg, rgba(154, 140, 255, 0.24), rgba(127, 215, 255, 0.09));
+        border-radius: 24px;
+        padding: 0.9rem;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      .brand p {
+        margin: 0.35rem 0 0;
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .nav {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .nav button {
+        border: 1px solid transparent;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
+        text-align: left;
+        padding: 0.75rem 0.85rem;
+        cursor: pointer;
+        transition: 0.2s ease;
+      }
+
+      .nav button.active,
+      .nav button:hover {
+        border-color: rgba(154, 140, 255, 0.5);
+        background: linear-gradient(135deg, rgba(154, 140, 255, 0.25), rgba(127, 215, 255, 0.08));
+        transform: translateX(2px);
+      }
+
+      .stats {
+        margin-top: auto;
+        border-radius: 20px;
+        border: 1px solid var(--outline);
+        padding: 0.9rem;
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .stats b {
+        font-size: 1.6rem;
+      }
+
+      .content {
+        background: linear-gradient(180deg, rgba(20, 21, 35, 0.83), rgba(12, 13, 23, 0.8));
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 0.7rem;
+        flex-wrap: wrap;
+      }
+
+      .input,
+      .chip,
+      .action {
+        border: 1px solid var(--outline);
+        border-radius: 14px;
+        background: var(--surface);
+        color: var(--text);
+      }
+
+      .input {
+        flex: 1 1 280px;
+        padding: 0.7rem 0.85rem;
+      }
+
+      .chip,
+      .action {
+        padding: 0.65rem 0.85rem;
+        cursor: pointer;
+      }
+
+      .action.primary {
+        background: linear-gradient(135deg, rgba(154, 140, 255, 0.72), rgba(127, 215, 255, 0.5));
+        border-color: transparent;
+        color: #101325;
+        font-weight: 700;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 0.85rem;
+      }
+
+      .card {
+        border: 1px solid var(--outline);
+        border-radius: 20px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+        padding: 0.9rem;
+        min-height: 128px;
+        display: grid;
+        gap: 0.4rem;
+        cursor: pointer;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+      }
+
+      .card:hover {
+        transform: translateY(-3px);
+        border-color: rgba(127, 215, 255, 0.6);
+      }
+
+      .icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        display: grid;
+        place-items: center;
+        font-size: 1.2rem;
+      }
+
+      .folder .icon { background: linear-gradient(135deg, rgba(154, 140, 255, 0.4), rgba(127, 215, 255, 0.2)); }
+      .file .icon { background: linear-gradient(135deg, rgba(127, 215, 255, 0.4), rgba(133, 246, 182, 0.2)); }
+
+      .meta {
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      @media (max-width: 900px) {
+        .app { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <aside class="pane sidebar">
+        <div class="brand">
+          <h1>∞ Infinite Files</h1>
+          <p>M3 expressive shell-inspired manager</p>
+        </div>
+
+        <nav class="nav" id="nav"></nav>
+
+        <section class="stats">
+          <small style="color: var(--muted)">Storage used</small><br />
+          <b>412 GB</b>
+          <div class="meta">/ 1 TB · encrypted · mirrored</div>
+        </section>
+      </aside>
+
+      <section class="pane content">
+        <header class="toolbar">
+          <input class="input" id="search" placeholder="Search in Infinite Files..." />
+          <button class="chip">Type: all</button>
+          <button class="chip">Sort: modified</button>
+          <button class="action primary" id="newFolder">+ New folder</button>
+        </header>
+
+        <section class="grid" id="grid"></section>
+      </section>
+    </main>
+
+    <script>
+      const sections = ["Home", "Projects", "Media", "Archive", "System"];
+      const seedItems = [
+        { name: "Nebula UI", type: "folder", info: "12 items · edited 2h ago" },
+        { name: "hyprland.conf", type: "file", info: "6.8 KB · edited today" },
+        { name: "wallpapers", type: "folder", info: "128 items · edited 1d ago" },
+        { name: "roadmap.md", type: "file", info: "12 KB · edited 30m ago" },
+        { name: "concept-art", type: "folder", info: "44 items · edited 3d ago" },
+        { name: "diagnostics.log", type: "file", info: "84 KB · edited now" },
+        { name: "renders", type: "folder", info: "87 items · edited 7h ago" },
+        { name: "session.json", type: "file", info: "2.1 KB · edited 5m ago" },
+      ];
+
+      const nav = document.getElementById("nav");
+      const grid = document.getElementById("grid");
+      const search = document.getElementById("search");
+
+      function drawNav(active = "Home") {
+        nav.innerHTML = "";
+        sections.forEach((label) => {
+          const btn = document.createElement("button");
+          btn.textContent = label;
+          if (label === active) btn.classList.add("active");
+          btn.onclick = () => {
+            drawNav(label);
+            drawGrid(seedItems);
+          };
+          nav.appendChild(btn);
+        });
+      }
+
+      function drawGrid(items) {
+        grid.innerHTML = "";
+        items.forEach((item) => {
+          const card = document.createElement("article");
+          card.className = `card ${item.type}`;
+          card.innerHTML = `
+            <div class="icon">${item.type === "folder" ? "📁" : "📄"}</div>
+            <strong>${item.name}</strong>
+            <div class="meta">${item.info}</div>
+          `;
+          grid.appendChild(card);
+        });
+      }
+
+      drawNav();
+      drawGrid(seedItems);
+
+      search.addEventListener("input", (event) => {
+        const query = event.target.value.toLowerCase().trim();
+        const filtered = seedItems.filter((item) =>
+          `${item.name} ${item.info}`.toLowerCase().includes(query)
+        );
+        drawGrid(filtered);
+      });
+
+      document.getElementById("newFolder").onclick = () => {
+        const name = `new-folder-${Math.floor(Math.random() * 99)}`;
+        seedItems.unshift({
+          name,
+          type: "folder",
+          info: "0 items · created now",
+        });
+        drawGrid(seedItems);
+      };
+    </script>
+  </body>
+</html>
