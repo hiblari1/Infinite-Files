@@ -1,3 +1,4 @@
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -14,18 +15,17 @@ class InfiniteFilesApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF9A8CFF),
-      brightness: Brightness.dark,
-    );
+    const seed = Color(0xFFCB97D8);
+    final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark);
 
     return MaterialApp(
-      title: 'Infinite Files',
       debugShowCheckedModeBanner: false,
+      title: 'Infinite Files',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: scheme,
-        scaffoldBackgroundColor: const Color(0xFF060711),
+        scaffoldBackgroundColor: const Color(0xFF130D17),
+        textTheme: Typography.whiteCupertino,
       ),
       home: const FileManagerScreen(),
     );
@@ -46,8 +46,6 @@ class FileNode {
   final int? size;
 
   bool get isDirectory => entity is Directory;
-
-  String get extension => isDirectory ? '' : p.extension(name).replaceFirst('.', '').toUpperCase();
 }
 
 enum SortMode { name, modified, size }
@@ -67,9 +65,9 @@ class _FileManagerScreenState extends State<FileManagerScreen> {
   List<FileNode> _entries = [];
   Directory? _currentDirectory;
 
-  bool _loading = false;
   SortMode _sortMode = SortMode.modified;
   bool _ascending = false;
+  bool _loading = false;
 
   @override
   void initState() {
@@ -86,14 +84,15 @@ class _FileManagerScreenState extends State<FileManagerScreen> {
 
   Future<void> _bootstrap() async {
     final home = _resolveHomeDirectory();
-    final docs = Directory(p.join(home.path, 'Documents'));
-    final downloads = Directory(p.join(home.path, 'Downloads'));
-    final desktop = Directory(p.join(home.path, 'Desktop'));
+    final common = [
+      home,
+      Directory(p.join(home.path, 'Documents')),
+      Directory(p.join(home.path, 'Downloads')),
+      Directory(p.join(home.path, 'Pictures')),
+      Directory(p.join(home.path, 'Videos')),
+    ];
 
-    _favorites.addAll(
-      [home, docs, downloads, desktop].where((directory) => directory.existsSync()),
-    );
-
+    _favorites.addAll(common.where((element) => element.existsSync()));
     await _openDirectory(_favorites.isNotEmpty ? _favorites.first : home);
   }
 
@@ -121,14 +120,12 @@ class _FileManagerScreenState extends State<FileManagerScreen> {
 
       for (final entity in entities) {
         final stat = entity.statSync();
-        final size = entity is File ? stat.size : null;
-
         nodes.add(
           FileNode(
             entity: entity,
             name: p.basename(entity.path),
             modified: stat.modified,
-            size: size,
+            size: entity is File ? stat.size : null,
           ),
         );
       }
@@ -138,105 +135,77 @@ class _FileManagerScreenState extends State<FileManagerScreen> {
         _entries = nodes;
       });
     } catch (_) {
-      _showSnack('Unable to open ${directory.path}');
+      _toast('Cannot open ${directory.path}');
     } finally {
       setState(() => _loading = false);
     }
   }
 
   Future<void> _createFolder() async {
-    if (_currentDirectory == null) {
-      return;
-    }
+    if (_currentDirectory == null) return;
 
     _folderController.clear();
-    final created = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Create folder'),
-          content: TextField(
-            controller: _folderController,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Folder name',
-              hintText: 'new-folder',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Create'),
-            ),
-          ],
-        );
-      },
+      builder: (context) => AlertDialog(
+        title: const Text('Create folder'),
+        content: TextField(
+          controller: _folderController,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'new folder'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Create')),
+        ],
+      ),
     );
 
-    if (created != true) {
-      return;
-    }
+    if (confirmed != true) return;
 
     final name = _folderController.text.trim();
-    if (name.isEmpty) {
-      return;
-    }
-
-    final folder = Directory(p.join(_currentDirectory!.path, name));
-    if (folder.existsSync()) {
-      _showSnack('Folder already exists.');
-      return;
-    }
+    if (name.isEmpty) return;
 
     try {
+      final folder = Directory(p.join(_currentDirectory!.path, name));
+      if (folder.existsSync()) {
+        _toast('Folder already exists');
+        return;
+      }
       await folder.create(recursive: true);
       await _openDirectory(_currentDirectory!);
-      _showSnack('Folder created: $name');
+      _toast('Created $name');
     } catch (_) {
-      _showSnack('Failed to create folder.');
+      _toast('Failed creating folder');
     }
   }
 
-  void _showSnack(String message) {
-    if (!mounted) {
-      return;
-    }
+  void _toast(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   List<FileNode> get _visibleEntries {
-    var list = [..._entries];
     final q = _searchController.text.trim().toLowerCase();
-    if (q.isNotEmpty) {
-      list = list.where((entry) => entry.name.toLowerCase().contains(q)).toList();
-    }
+    var list = _entries.where((e) => e.name.toLowerCase().contains(q)).toList();
 
     list.sort((a, b) {
-      int comparison;
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+
+      int cmp;
       switch (_sortMode) {
         case SortMode.name:
-          comparison = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+          cmp = a.name.toLowerCase().compareTo(b.name.toLowerCase());
           break;
         case SortMode.modified:
-          comparison = a.modified.compareTo(b.modified);
+          cmp = a.modified.compareTo(b.modified);
           break;
         case SortMode.size:
-          comparison = (a.size ?? -1).compareTo(b.size ?? -1);
+          cmp = (a.size ?? -1).compareTo(b.size ?? -1);
           break;
       }
-
-      if (a.isDirectory && !b.isDirectory) {
-        return -1;
-      }
-      if (!a.isDirectory && b.isDirectory) {
-        return 1;
-      }
-
-      return _ascending ? comparison : -comparison;
+      return _ascending ? cmp : -cmp;
     });
 
     return list;
@@ -244,165 +213,68 @@ class _FileManagerScreenState extends State<FileManagerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentPath = _currentDirectory?.path ?? 'Loading...';
-    final formatter = DateFormat('yyyy-MM-dd HH:mm');
+    final formatter = DateFormat('MMM d');
 
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0A0D1F), Color(0xFF060711), Color(0xFF13103A)],
+          gradient: RadialGradient(
+            radius: 1.25,
+            center: Alignment.topLeft,
+            colors: [Color(0xFF2A1830), Color(0xFF130D17), Color(0xFF100B14)],
           ),
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                SizedBox(
-                  width: 290,
-                  child: _Sidebar(
-                    favorites: _favorites,
-                    current: _currentDirectory,
-                    onSelect: _openDirectory,
-                  ),
+                _ShellSidebar(
+                  favorites: _favorites,
+                  current: _currentDirectory,
+                  onPick: _openDirectory,
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 10),
                 Expanded(
-                  child: Card(
-                    color: const Color(0x221A1D35),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      color: const Color(0xB0120C15),
+                      child: Stack(
                         children: [
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              SizedBox(
-                                width: 320,
-                                child: TextField(
-                                  controller: _searchController,
-                                  onChanged: (_) => setState(() {}),
-                                  decoration: const InputDecoration(
-                                    prefixIcon: Icon(Icons.search_rounded),
-                                    hintText: 'Search in current folder',
-                                  ),
-                                ),
-                              ),
-                              FilledButton.icon(
-                                onPressed: _createFolder,
-                                icon: const Icon(Icons.create_new_folder_outlined),
-                                label: const Text('New folder'),
-                              ),
-                              _SortDropdown(
-                                mode: _sortMode,
-                                ascending: _ascending,
-                                onModeChanged: (mode) => setState(() => _sortMode = mode),
-                                onDirectionChanged: () => setState(() => _ascending = !_ascending),
-                              ),
-                              ActionChip(
-                                label: const Text('Refresh'),
-                                avatar: const Icon(Icons.refresh_rounded, size: 18),
-                                onPressed: () {
-                                  if (_currentDirectory != null) {
-                                    _openDirectory(_currentDirectory!);
-                                  }
-                                },
+                              _TopPathBar(current: _currentDirectory),
+                              Expanded(
+                                child: _loading
+                                    ? const Center(child: CircularProgressIndicator())
+                                    : Padding(
+                                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 72),
+                                        child: _WallpaperLikeGrid(
+                                          entries: _visibleEntries,
+                                          formatter: formatter,
+                                          onOpenDir: (dir) => _openDirectory(dir),
+                                        ),
+                                      ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
-                          Text(
-                            currentPath,
-                            style: Theme.of(context).textTheme.titleMedium,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: _loading
-                                ? const Center(child: CircularProgressIndicator())
-                                : _visibleEntries.isEmpty
-                                    ? const Center(child: Text('No files found.'))
-                                    : GridView.builder(
-                                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                                          maxCrossAxisExtent: 280,
-                                          mainAxisSpacing: 10,
-                                          crossAxisSpacing: 10,
-                                          childAspectRatio: 1.8,
-                                        ),
-                                        itemCount: _visibleEntries.length,
-                                        itemBuilder: (context, index) {
-                                          final entry = _visibleEntries[index];
-                                          return InkWell(
-                                            borderRadius: BorderRadius.circular(18),
-                                            onTap: () {
-                                              if (entry.isDirectory) {
-                                                _openDirectory(entry.entity as Directory);
-                                              }
-                                            },
-                                            child: Ink(
-                                              decoration: BoxDecoration(
-                                                borderRadius: BorderRadius.circular(18),
-                                                gradient: LinearGradient(
-                                                  colors: entry.isDirectory
-                                                      ? [const Color(0x409A8CFF), const Color(0x207FD7FF)]
-                                                      : [const Color(0x307FD7FF), const Color(0x2085F6B6)],
-                                                  begin: Alignment.topLeft,
-                                                  end: Alignment.bottomRight,
-                                                ),
-                                                border: Border.all(color: const Color(0x33FFFFFF)),
-                                              ),
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(12),
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                  children: [
-                                                    Row(
-                                                      children: [
-                                                        Icon(
-                                                          entry.isDirectory ? Icons.folder_rounded : Icons.description_outlined,
-                                                          color: Colors.white,
-                                                        ),
-                                                        const SizedBox(width: 8),
-                                                        Expanded(
-                                                          child: Text(
-                                                            entry.name,
-                                                            maxLines: 1,
-                                                            overflow: TextOverflow.ellipsis,
-                                                            style: const TextStyle(fontWeight: FontWeight.w600),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    Text(
-                                                      entry.isDirectory
-                                                          ? 'Directory'
-                                                          : '${entry.extension.isEmpty ? 'File' : entry.extension} · ${_humanSize(entry.size ?? 0)}',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodySmall
-                                                          ?.copyWith(color: Colors.white70),
-                                                    ),
-                                                    Text(
-                                                      'Modified ${formatter.format(entry.modified)}',
-                                                      style: Theme.of(context)
-                                                          .textTheme
-                                                          .bodySmall
-                                                          ?.copyWith(color: Colors.white54),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        },
-                                      ),
+                          Align(
+                            alignment: Alignment.bottomCenter,
+                            child: _BottomCommandBar(
+                              controller: _searchController,
+                              onRefresh: () {
+                                if (_currentDirectory != null) {
+                                  _openDirectory(_currentDirectory!);
+                                }
+                              },
+                              onNewFolder: _createFolder,
+                              selectedSort: _sortMode,
+                              onSortChanged: (mode) => setState(() => _sortMode = mode),
+                              onSortDirection: () => setState(() => _ascending = !_ascending),
+                              onSearchChanged: () => setState(() {}),
+                            ),
                           ),
                         ],
                       ),
@@ -418,111 +290,92 @@ class _FileManagerScreenState extends State<FileManagerScreen> {
   }
 }
 
-class _SortDropdown extends StatelessWidget {
-  const _SortDropdown({
-    required this.mode,
-    required this.ascending,
-    required this.onModeChanged,
-    required this.onDirectionChanged,
-  });
-
-  final SortMode mode;
-  final bool ascending;
-  final ValueChanged<SortMode> onModeChanged;
-  final VoidCallback onDirectionChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        DropdownButton<SortMode>(
-          value: mode,
-          onChanged: (value) {
-            if (value != null) {
-              onModeChanged(value);
-            }
-          },
-          items: const [
-            DropdownMenuItem(value: SortMode.modified, child: Text('Sort: Modified')),
-            DropdownMenuItem(value: SortMode.name, child: Text('Sort: Name')),
-            DropdownMenuItem(value: SortMode.size, child: Text('Sort: Size')),
-          ],
-        ),
-        IconButton(
-          onPressed: onDirectionChanged,
-          icon: Icon(ascending ? Icons.north_rounded : Icons.south_rounded),
-          tooltip: ascending ? 'Ascending' : 'Descending',
-        ),
-      ],
-    );
-  }
-}
-
-class _Sidebar extends StatelessWidget {
-  const _Sidebar({
+class _ShellSidebar extends StatelessWidget {
+  const _ShellSidebar({
     required this.favorites,
     required this.current,
-    required this.onSelect,
+    required this.onPick,
   });
 
   final List<Directory> favorites;
   final Directory? current;
-  final ValueChanged<Directory> onSelect;
+  final ValueChanged<Directory> onPick;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: const Color(0x221A1D35),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      width: 180,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: const Color(0xAA1C1420),
+        border: Border.all(color: const Color(0x44FFFFFF)),
+      ),
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Pick a wallpaper', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white70)),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView.builder(
+              itemCount: favorites.length,
+              itemBuilder: (context, index) {
+                final dir = favorites[index];
+                final active = current?.path == dir.path;
+                final label = p.basename(dir.path).isEmpty ? dir.path : p.basename(dir.path);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: ListTile(
+                    dense: true,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    tileColor: active ? const Color(0x88CA95D7) : Colors.transparent,
+                    leading: Icon(active ? Icons.check_box : Icons.check_box_outline_blank, size: 15, color: Colors.white54),
+                    title: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12)),
+                    onTap: () => onPick(dir),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopPathBar extends StatelessWidget {
+  const _TopPathBar({required this.current});
+
+  final Directory? current;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = current?.path ?? '';
+    final segments = path.split(RegExp(r'[\\/]')).where((e) => e.isNotEmpty).toList();
+    final crumbs = segments.length > 4 ? segments.sublist(segments.length - 4) : segments;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Color(0x22FFFFFF))),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                gradient: const LinearGradient(
-                  colors: [Color(0x559A8CFF), Color(0x337FD7FF)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+            const Icon(Icons.folder_open, size: 14, color: Colors.white60),
+            const SizedBox(width: 8),
+            for (final c in crumbs)
+              Container(
+                margin: const EdgeInsets.only(right: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0x553A233F),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: const Color(0x35FFFFFF)),
                 ),
+                child: Text(c, style: const TextStyle(fontSize: 11, color: Colors.white70)),
               ),
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('∞ Infinite Files', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  SizedBox(height: 4),
-                  Text('M3 expressive desktop manager'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text('Favorites', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                itemCount: favorites.length,
-                itemBuilder: (context, index) {
-                  final dir = favorites[index];
-                  final active = current?.path == dir.path;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: ListTile(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      tileColor: active ? const Color(0x409A8CFF) : const Color(0x14000000),
-                      leading: const Icon(Icons.folder_copy_rounded),
-                      title: Text(p.basename(dir.path).isEmpty ? dir.path : p.basename(dir.path)),
-                      subtitle: Text(dir.path, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      onTap: () => onSelect(dir),
-                    ),
-                  );
-                },
-              ),
-            ),
           ],
         ),
       ),
@@ -530,16 +383,141 @@ class _Sidebar extends StatelessWidget {
   }
 }
 
-String _humanSize(int size) {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  double current = size.toDouble();
-  int unit = 0;
+class _WallpaperLikeGrid extends StatelessWidget {
+  const _WallpaperLikeGrid({
+    required this.entries,
+    required this.formatter,
+    required this.onOpenDir,
+  });
 
-  while (current >= 1024 && unit < units.length - 1) {
-    current /= 1024;
-    unit++;
+  final List<FileNode> entries;
+  final DateFormat formatter;
+  final ValueChanged<Directory> onOpenDir;
+
+  @override
+  Widget build(BuildContext context) {
+    if (entries.isEmpty) {
+      return const Center(child: Text('No files found', style: TextStyle(color: Colors.white60)));
+    }
+
+    return GridView.builder(
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        crossAxisSpacing: 24,
+        mainAxisSpacing: 24,
+        childAspectRatio: 1.35,
+      ),
+      itemCount: entries.length,
+      itemBuilder: (context, index) {
+        final node = entries[index];
+        final featured = index % 5 == 0;
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () {
+            if (node.isDirectory) {
+              onOpenDir(node.entity as Directory);
+            }
+          },
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: featured ? const Color(0xFFCC9BD5) : const Color(0x11FFFFFF),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0x33FFFFFF)),
+                  ),
+                  child: Center(
+                    child: Text(
+                      node.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: featured ? const Color(0xFF35243B) : Colors.white60,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(formatter.format(node.modified), style: const TextStyle(fontSize: 9, color: Colors.white54)),
+            ],
+          ),
+        );
+      },
+    );
   }
+}
 
-  final formatted = unit == 0 ? current.toStringAsFixed(0) : current.toStringAsFixed(1);
-  return '$formatted ${units[unit]}';
+class _BottomCommandBar extends StatelessWidget {
+  const _BottomCommandBar({
+    required this.controller,
+    required this.onRefresh,
+    required this.onNewFolder,
+    required this.selectedSort,
+    required this.onSortChanged,
+    required this.onSortDirection,
+    required this.onSearchChanged,
+  });
+
+  final TextEditingController controller;
+  final VoidCallback onRefresh;
+  final VoidCallback onNewFolder;
+  final SortMode selectedSort;
+  final ValueChanged<SortMode> onSortChanged;
+  final VoidCallback onSortDirection;
+  final VoidCallback onSearchChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      constraints: const BoxConstraints(maxWidth: 430),
+      decoration: BoxDecoration(
+        color: const Color(0xCC251D2A),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0x22FFFFFF)),
+      ),
+      child: Row(
+        children: [
+          IconButton(onPressed: onNewFolder, icon: const Icon(Icons.create_new_folder_outlined, size: 16), tooltip: 'New Folder'),
+          IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh_rounded, size: 16), tooltip: 'Refresh'),
+          IconButton(onPressed: onSortDirection, icon: const Icon(Icons.swap_vert_rounded, size: 16), tooltip: 'Sort Direction'),
+          DropdownButtonHideUnderline(
+            child: DropdownButton<SortMode>(
+              value: selectedSort,
+              dropdownColor: const Color(0xFF231A28),
+              onChanged: (mode) {
+                if (mode != null) onSortChanged(mode);
+              },
+              items: const [
+                DropdownMenuItem(value: SortMode.modified, child: Text('Modified', style: TextStyle(fontSize: 11))),
+                DropdownMenuItem(value: SortMode.name, child: Text('Name', style: TextStyle(fontSize: 11))),
+                DropdownMenuItem(value: SortMode.size, child: Text('Size', style: TextStyle(fontSize: 11))),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: (_) => onSearchChanged(),
+              style: const TextStyle(fontSize: 12),
+              decoration: const InputDecoration(
+                hintText: 'Hit / to search',
+                hintStyle: TextStyle(fontSize: 12),
+                isDense: true,
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
