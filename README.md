@@ -4,7 +4,7 @@ Infinite Files is a full Flutter + Dart desktop file manager with an M3 expressi
 
 ## Features
 
-- Material 3 expressive dark desktop UI.
+- Material 3 expressive dark desktop UI with an illogical-impulse-inspired shell layout (left rail, path chips, floating command/search bar).
 - Sidebar favorites for Home/Documents/Downloads/Desktop.
 - Folder navigation by clicking directory cards.
 - Search/filter in current directory.
@@ -20,6 +20,17 @@ Infinite Files is a full Flutter + Dart desktop file manager with an M3 expressi
   - Linux: `clang`, `cmake`, `ninja`, GTK dev libs
   - macOS: Xcode command line tools
   - Windows: Visual Studio C++ desktop workload
+
+## First-time desktop setup (required)
+
+If your repo was created without desktop folders, run this once before building:
+
+```bash
+flutter config --enable-linux-desktop --enable-macos-desktop --enable-windows-desktop
+flutter create --platforms=linux,macos,windows .
+```
+
+This generates `linux/`, `macos/`, and `windows/` project files needed by `flutter build`.
 
 ## Run locally
 
@@ -64,4 +75,3 @@ This creates `dist/InfiniteFiles.dmg` using `hdiutil`.
 
 ### Windows EXE
 
-`flutter build windows` already emits an `.exe` in the release folder. If you want a single installer EXE, package with an installer tool (Inno Setup / NSIS / WiX) using the release directory.
